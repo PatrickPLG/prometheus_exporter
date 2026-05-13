@@ -179,7 +179,7 @@ module PrometheusExporter
       close_socket_if_old!
       process_queue
     rescue => e
-      logger.error "Prometheus Exporter, failed to send message #{e}"
+      logger.error "Prometheus Exporter, failed to send message #{e.class}: #{e}\n#{e.backtrace&.first(15)&.join("\n")}"
     end
 
     def ensure_worker_thread!
