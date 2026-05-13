@@ -84,4 +84,61 @@ class PrometheusExporterTest < Minitest::Test
 
     assert_includes(logs.string, "dropping message cause queue is full")
   end
+
+  # Regression: gems that monkey-patch TCPSocket.new with a positional-only
+  # signature (e.g. socksify, used by httpi/savon for SOAP) misinterpret the
+  # `connect_timeout:` keyword as a Hash positional arg and raise
+  # `TypeError: no implicit conversion of Hash into String`.
+  # When `connect_timeout` is not configured (the default), the client must not
+  # pass the keyword argument at all.
+  def test_does_not_pass_connect_timeout_kwarg_when_unset
+    received_kwargs =
+      capture_tcpsocket_new_kwargs do
+        PrometheusExporter::Client.new(
+          logger: Logger.new(StringIO.new),
+          host: "localhost",
+          port: 1,
+          process_queue_once_and_stop: true,
+        ).send("trigger")
+      end
+
+    refute_includes(received_kwargs.keys, :connect_timeout)
+  end
+
+  def test_passes_connect_timeout_kwarg_when_set
+    received_kwargs =
+      capture_tcpsocket_new_kwargs do
+        PrometheusExporter::Client.new(
+          logger: Logger.new(StringIO.new),
+          host: "localhost",
+          port: 1,
+          connect_timeout: 5,
+          process_queue_once_and_stop: true,
+        ).send("trigger")
+      end
+
+    assert_equal(5, received_kwargs[:connect_timeout])
+  end
+
+  private
+
+  def capture_tcpsocket_new_kwargs(&block)
+    captured = nil
+    original = TCPSocket
+    Object.send(:remove_const, :TCPSocket)
+    Object.const_set(
+      :TCPSocket,
+      Class.new do
+        define_singleton_method(:new) do |*_args, **kwargs|
+          captured = kwargs
+          raise Errno::ECONNREFUSED, "fake - do not connect"
+        end
+      end,
+    )
+    block.call
+    captured
+  ensure
+    Object.send(:remove_const, :TCPSocket)
+    Object.const_set(:TCPSocket, original)
+  end
 end

@@ -239,7 +239,16 @@ module PrometheusExporter
 
       close_socket_if_old!
       if !@socket
-        @socket = TCPSocket.new @host, @port, connect_timeout: @connect_timeout
+        @socket =
+          if @connect_timeout
+            TCPSocket.new @host, @port, connect_timeout: @connect_timeout
+          else
+            # Avoid passing the keyword arg when not set: gems that monkey-patch
+            # TCPSocket.new with a positional-only signature (e.g. socksify, used
+            # by httpi/savon) misinterpret the kwargs Hash as a String parameter
+            # and raise TypeError: no implicit conversion of Hash into String.
+            TCPSocket.new @host, @port
+          end
 
         if use_ssl?
           @socket = OpenSSL::SSL::SSLSocket.new(@socket, @ssl_context)

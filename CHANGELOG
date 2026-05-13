@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-- FIX: Puma 8 compatibility - `Puma.stats` can return a Hash in Puma >= 8, which broke `JSON.parse` in the instrumentation. Handle both String (Puma <= 6) and Hash (Puma >= 8) return values.
+- FIX: Don't pass `connect_timeout:` kwarg to `TCPSocket.new` when it's not configured. Gems that monkey-patch `TCPSocket.new` with a positional-only signature (e.g. `socksify`, used transitively by `httpi`/`savon` for SOAP integrations) misinterpret the kwargs Hash as a String positional argument and raise `TypeError: no implicit conversion of Hash into String`. The kwarg is now only passed when explicitly set by the user.
+- FIX: Puma instrumentation defensively handles `Puma.stats` returning either a JSON String (Puma <= 6) or a Hash (potential future Puma versions).
 
 ## [2.3.1] - 2025-11-11
 
