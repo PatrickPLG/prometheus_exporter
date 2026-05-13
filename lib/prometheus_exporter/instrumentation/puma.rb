@@ -37,7 +37,10 @@ module PrometheusExporter::Instrumentation
     end
 
     def collect_puma_stats(metric)
-      stats = JSON.parse(::Puma.stats)
+      # Puma <= 6 returned a JSON string from `Puma.stats`; Puma >= 8 can return
+      # a Hash directly (passing a Hash to JSON.parse raises TypeError).
+      raw = ::Puma.stats
+      stats = raw.is_a?(String) ? JSON.parse(raw) : deep_stringify_keys(raw)
 
       if stats.key?("workers")
         metric[:phase] = stats["phase"]
@@ -55,6 +58,17 @@ module PrometheusExporter::Instrumentation
     end
 
     private
+
+    def deep_stringify_keys(value)
+      case value
+      when Hash
+        value.each_with_object({}) { |(k, v), out| out[k.to_s] = deep_stringify_keys(v) }
+      when Array
+        value.map { |v| deep_stringify_keys(v) }
+      else
+        value
+      end
+    end
 
     def collect_worker_status(metric, status)
       metric[:request_backlog] ||= 0
